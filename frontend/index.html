@@ -4,10 +4,16 @@
     <meta charset="UTF-8">
     <link rel="icon" href="/favicon.ico">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vite App</title>
+    <title>3D Chess Game</title>
+    <!-- ChessboardJS CSS and JS -->
+    <link rel="stylesheet" href="/chessboardjs/www/css/chessboard.css">
   </head>
   <body>
     <div id="app"></div>
+    <!-- jQuery (required by chessboardjs) -->
+    <script src="/chessboardjs/www/js/jquery-1.10.1.min.js"></script>
+    <!-- ChessboardJS loaded after jQuery -->
+    <script src="/chessboardjs/www/js/chessboard.js"></script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

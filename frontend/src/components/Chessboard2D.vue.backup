@@ -1,0 +1,224 @@
+<script setup lang="ts">
+import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { Chess } from 'chess.js'
+
+// 声明全局 Chessboard 构造函数
+declare global {
+  interface Window {
+    Chessboard: any
+  }
+}
+
+interface Props {
+  position?: string
+  orientation?: 'white' | 'black'
+  draggable?: boolean
+  width?: number
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  position: 'start',
+  orientation: 'white',
+  draggable: true,
+  width: 600
+})
+
+const emit = defineEmits<{
+  'piece-drop': [source: string, target: string]
+  'position-change': [fen: string]
+}>()
+
+const boardEl = ref<HTMLDivElement>()
+const boardId = `chessboard-${Math.random().toString(36).substr(2, 9)}`
+let board: any = null
+let chess = new Chess()
+
+// 获取图片资源的URL
+const getPieceImageUrl = (piece: string) => {
+  return `/chessboardjs/www/img/chesspieces/wikipedia/${piece}.png`
+}
+
+// 初始化棋盘
+const initBoard = () => {
+  console.log('🎯 initBoard called')
+  console.log('  - boardEl exists:', !!boardEl.value)
+  console.log('  - Chessboard available:', typeof Chessboard !== 'undefined')
+  console.log('  - jQuery available:', typeof jQuery !== 'undefined')
+
+  if (!boardEl.value) {
+    console.error('❌ boardEl is not ready')
+    return
+  }
+
+  if (typeof Chessboard === 'undefined') {
+    console.error('❌ Chessboard is not defined')
+    // 等待一下再尝试
+    setTimeout(initBoard, 200)
+    return
+  }
+
+  try {
+    console.log('✅ Creating chessboard instance...')
+    console.log('  - boardEl.value:', boardEl.value)
+    console.log('  - boardId:', boardId)
+
+    // chessboardjs 需要 jQuery 选择器
+    const element = typeof jQuery !== 'undefined' ? jQuery(boardEl.value) : boardEl.value
+
+    // 创建棋盘实例
+    board = new Chessboard(element, {
+      position: props.position,
+      orientation: props.orientation,
+      draggable: props.draggable,
+      width: props.width,
+      pieceTheme: getPieceImageUrl,
+      onPieceDrop: (source: string, target: string) => {
+        // 尝试移动
+        const move = chess.move({
+          from: source,
+          to: target,
+          promotion: 'q' // 默认升变为后
+        })
+
+        // 如果移动不合法，拒绝
+        if (move === null) return false
+
+        // 移动成功，触发事件
+        emit('piece-drop', source, target)
+        emit('position-change', chess.fen())
+
+        // 更新棋盘位置
+        board.position(chess.fen())
+
+        return true
+      },
+      onSnapEnd: () => {
+        board.position(chess.fen())
+      },
+      onDragStart: (piece: string, source: string, position: string, orientation: string) => {
+        // 检查游戏是否结束
+        if (chess.isGameOver()) return false
+
+        // 只允许拖动己方棋子
+        if ((chess.turn() === 'w' && piece[0] === 'b') ||
+            (chess.turn() === 'b' && piece[0] === 'w')) {
+          return false
+        }
+
+        return true
+      }
+    })
+    console.log('✅ Chessboard created successfully!', board)
+  } catch (error) {
+    console.error('❌ Failed to initialize chessboard:', error)
+  }
+}
+
+// 检查依赖是否加载
+const waitForDependencies = (callback: () => void, retries = 50) => {
+  if (retries <= 0) {
+    console.error('❌ Timeout waiting for dependencies')
+    return
+  }
+
+  if (typeof Chessboard !== 'undefined' && typeof jQuery !== 'undefined') {
+    console.log('✅ All dependencies loaded')
+    callback()
+  } else {
+    console.log(`⏳ Waiting for dependencies... (${retries} retries left)`)
+    setTimeout(() => waitForDependencies(callback, retries - 1), 100)
+  }
+}
+
+// 组件挂载时初始化
+onMounted(() => {
+  console.log('🚀 Component mounted, waiting for dependencies...')
+  waitForDependencies(() => {
+    console.log('🎯 Starting board initialization...')
+    initBoard()
+  })
+})
+
+// 组件卸载时清理
+onUnmounted(() => {
+  // chessboardjs 没有显式的 destroy 方法
+  // 棋盘会自动被垃圾回收
+})
+
+// 监听位置变化
+watch(() => props.position, (newPosition) => {
+  if (board && newPosition) {
+    board.position(newPosition)
+  }
+})
+
+// 监听朝向变化
+watch(() => props.orientation, (newOrientation) => {
+  if (board) {
+    board.orientation(newOrientation)
+  }
+})
+
+// 暴露一些方法给父组件
+const getPosition = () => chess.fen()
+const reset = () => {
+  chess = new Chess()
+  if (board) {
+    board.start()
+  }
+  emit('position-change', chess.fen())
+}
+const isGameOver = () => chess.isGameOver()
+const isCheck = () => chess.isCheck()
+const getTurn = () => chess.turn()
+
+defineExpose({
+  getPosition,
+  reset,
+  isGameOver,
+  isCheck,
+  getTurn,
+  chess
+})
+</script>
+
+<template>
+  <div class="chessboard-2d-wrapper">
+    <div :id="boardId" ref="boardEl" class="chessboard-2d"></div>
+  </div>
+</template>
+
+<style scoped>
+.chessboard-2d-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  width: 100%;
+  height: 100%;
+  min-height: 600px;
+  background-color: #f0f0f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.chessboard-2d {
+  /* chessboardjs 会自动添加样式 */
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* 确保 chessboardjs 的棋盘能正确显示 */
+:deep(#chessboard) {
+  width: 100% !important;
+  max-width: 600px;
+}
+
+:deep(#chessboard .white-1e1d7) {
+  /* 白色格子 */
+}
+
+:deep(#chessboard .black-3c85d) {
+  /* 黑色格子 */
+}
+</style>
