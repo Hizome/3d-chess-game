@@ -2,15 +2,18 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
-import * as fs from 'fs'
-import { join } from 'path'
+
+const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
 // 复制资源的函数
-function copyChessboardAssets() {
-  const srcDir = join(__dirname, 'node_modules/chessboardjs/www')
-  const destDir = join(__dirname, 'public/chessboardjs/www')
+function copyCmChessboardAssets() {
+  const fs = require('fs')
+  const path = require('path')
 
-  function copyDir(src: string, dest: string) {
+  const srcDir = path.join(__dirname, 'node_modules/cm-chessboard/src')
+  const destDir = path.join(__dirname, 'public/cm-chessboard')
+
+  function copyDir(src, dest) {
     if (!fs.existsSync(dest)) {
       fs.mkdirSync(dest, { recursive: true })
     }
@@ -18,8 +21,8 @@ function copyChessboardAssets() {
     const entries = fs.readdirSync(src, { withFileTypes: true })
 
     for (const entry of entries) {
-      const srcPath = join(src, entry.name)
-      const destPath = join(dest, entry.name)
+      const srcPath = path.join(src, entry.name)
+      const destPath = path.join(dest, entry.name)
 
       if (entry.isDirectory()) {
         copyDir(srcPath, destPath)
@@ -31,7 +34,7 @@ function copyChessboardAssets() {
 
   if (fs.existsSync(srcDir)) {
     copyDir(srcDir, destDir)
-    console.log('✓ Copied chessboardjs assets to public/')
+    console.log('✓ Copied cm-chessboard assets to public/')
   }
 }
 
@@ -40,23 +43,21 @@ export default defineConfig({
   plugins: [
     vue(),
     vueDevTools(),
-    // 自定义插件：复制 chessboardjs 资源到 public
+    // 自定义插件：复制 cm-chessboard 资源到 public
     {
-      name: 'copy-chessboardjs-assets',
-      configureServer(server) {
-        // 在开发服务器启动时复制资源
-        copyChessboardAssets()
+      name: 'copy-cm-chessboard-assets',
+      configureServer() {
+        copyCmChessboardAssets()
       },
       writeBundle() {
-        // 在构建时也复制资源
-        copyChessboardAssets()
+        copyCmChessboardAssets()
       }
     }
   ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
-    },
+    }
   },
   assetsInclude: ['**/*.png', '**/*.jpg', '**/*.gif', '**/*.svg'],
   server: {

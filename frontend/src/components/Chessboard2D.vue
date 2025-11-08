@@ -1,39 +1,30 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { Chess } from 'chess.js'
+import { Chessboard, COLOR, INPUT_EVENT_TYPE, FEN } from 'cm-chessboard'
 
-// 声明全局 Chessboard 和 jQuery
-declare global {
-  interface Window {
-    Chessboard: any
-    jQuery: any
-  }
-}
-
+// 声明全局类型（如果需要）
 const boardEl = ref<HTMLDivElement>()
-const boardId = `chessboard-${Math.random().toString(36).substr(2, 9)}`
-let board: any = null
+let board: Chessboard | null = null
 let chess = new Chess()
 
-// 等待依赖加载
-const waitForDependencies = (callback: () => void, retries = 50) => {
-  if (retries <= 0) {
-    return
+// 棋盘输入事件处理器
+const inputHandler = (event: any) => {
+  switch (event.type) {
+    case INPUT_EVENT_TYPE.validateMoveInput:
+      // 验证移动是否合法
+      const move = chess.move({
+        from: event.squareFrom,
+        to: event.squareTo,
+        promotion: 'q' // 默认升变为后
+      })
+      if (move) {
+        // 移动合法，更新棋盘位置
+        board?.setPosition(chess.fen())
+      }
+      return !!move // 返回 true 允许移动，false 拒绝移动
   }
-
-  // 检查是否有 ChessBoard 函数（未暴露到 window）
-  const hasChessBoard = typeof (window as any).ChessBoard === 'function'
-  const hasJQuery = typeof window.jQuery === 'function'
-
-  if (hasChessBoard && hasJQuery) {
-    // 如果 ChessBoard 没有暴露到 window，手动暴露
-    if (typeof window.Chessboard === 'undefined') {
-      ;(window as any).Chessboard = (window as any).ChessBoard
-    }
-    callback()
-  } else {
-    setTimeout(() => waitForDependencies(callback, retries - 1), 100)
-  }
+  return true
 }
 
 // 初始化棋盘
@@ -42,30 +33,22 @@ const initBoard = () => {
     return
   }
 
-  if (typeof window.Chessboard === 'undefined') {
-    setTimeout(initBoard, 200)
-    return
-  }
-
   try {
-    // 使用字符串 ID（推荐方式）
-    const containerId = boardId
-
     // 创建棋盘实例
-    board = new window.Chessboard(containerId, {
-      position: 'start',
-      orientation: 'white',
-      draggable: true,
-      width: 600,
-      pieceTheme: (piece: string) => `/chessboardjs/www/img/chesspieces/wikipedia/${piece}.png`,
-      onPieceDrop: (source: string, target: string) => {
-        const move = chess.move({ from: source, to: target, promotion: 'q' })
-        if (move) {
-          board.position(chess.fen())
-        }
-        return !!move
+    board = new Chessboard(boardEl.value, {
+      position: FEN.start, // 初始位置
+      orientation: COLOR.white, // 白方视角
+      assetUrl: '/cm-chessboard/', // 资源路径
+      responsive: true, // 自适应容器
+      style: {
+        cssClass: 'default',
+        showCoordinates: true, // 显示坐标
+        borderType: 'thin' // 边框类型
       }
     })
+
+    // 启用用户输入
+    board.enableMoveInput(inputHandler, COLOR.white)
   } catch (error) {
     console.error('Failed to initialize chessboard:', error)
   }
@@ -73,15 +56,33 @@ const initBoard = () => {
 
 // 组件挂载时初始化
 onMounted(() => {
-  waitForDependencies(() => {
-    initBoard()
-  })
+  initBoard()
+})
+
+// 组件卸载时清理
+onUnmounted(() => {
+  if (board) {
+    board.destroy()
+  }
+})
+
+// 导出方法供父组件调用
+defineExpose({
+  getPosition: () => chess.fen(),
+  setPosition: (fen: string) => {
+    chess = new Chess(fen)
+    board?.setPosition(fen)
+  },
+  reset: () => {
+    chess = new Chess()
+    board?.setPosition(FEN.start)
+  }
 })
 </script>
 
 <template>
   <div class="chessboard-2d-wrapper">
-    <div :id="boardId" ref="boardEl" class="chessboard-2d-container"></div>
+    <div ref="boardEl" class="chessboard-2d-container"></div>
   </div>
 </template>
 
@@ -99,33 +100,24 @@ onMounted(() => {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-/* 为 chessboard 容器设置明确的尺寸 */
 .chessboard-2d-container {
-  width: 600px;
   max-width: 100%;
+  max-height: 100%;
   position: relative;
 }
 
-/* 确保 chessboard 可以正确渲染 - 使用通配符选择器 */
-:deep([id^="chessboard"]) {
-  width: 100% !important;
-  max-width: 600px;
-  margin: 0 auto;
+/* cm-chessboard 使用 SVG 渲染，默认样式已经很不错 */
+.chessboard-2d-container svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
 }
 
-:deep([id^="chessboard"] .board-b72b1) {
-  width: 100% !important;
-}
-
-/* 确保棋盘方格可以正确显示 */
-:deep([id^="chessboard"] .square-55d63) {
-  width: calc(600px / 8) !important;
-  height: calc(600px / 8) !important;
-}
-
-/* 确保棋子图片可以正确显示 */
-:deep([id^="chessboard"] .piece-417db) {
-  width: 100% !important;
-  height: 100% !important;
+/* 自定义棋盘样式（如果需要） */
+:deep(.cm-chessboard) {
+  --light-color: #f0d9b5;
+  --dark-color: #b58863;
+  --hover-color: #6fa8dc;
+  --focus-color: #99ccff;
 }
 </style>
